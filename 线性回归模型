@@ -1,0 +1,64 @@
+#第一部分导入库
+import numpy as np #导入numpy，用来处理数组数据
+from sklearn.linear_model import LinearRegression #从sclikit-learn库里导入线性回归模型，这就是我们要用的黑盒
+from sklearn.metrics import mean_squared_error, mean_absolute_error #导入两个评估指标，用来衡量模型预测得好不好
+from sklearn.model_selection import train_test_split #导入数据集划分工具，把数据分成训练集和测试集
+import matplotlib.pyplot as plt #导入图画库，用来可视化结果
+
+#加载数据
+era5   = np.load(r'data/ERA5_npy/你的文件名.npy')
+hres   = np.load(r'data/HRES/你的文件名.npy')
+imerg  = np.load(r'data/IMERG_npy/你的文件名.npy')
+gauges = np.load(r'data/gauges_npy/你的文件名.npy')
+#把四类数据从硬盘加载进内存，每个变量对应一个数据源。路径钱的r是告诉Python这是原始字符串，防止反斜杠被误读！这里可能要改文件格式
+target = gauges #量雨筒的实测数据时最准确的，所以把量雨筒设为目标值，也是我们希望模型预测的正确答案
+
+#数据预处理
+era5_flat  = era5.reshape(era5.shape[0], -1)
+hres_flat  = hres.reshape(hres.shape[0], -1)
+imerg_flat = imerg.reshape(imerg.shape[0], -1)
+#线性回归只能接受二维数据，格式是（样本数，特征数）。但我们已有的数据是三维的（时间，高，宽），所以要把空间维度展平。era5.shape【0】代表时间步数量保持不变，-1是让numpy自动计算高*宽的结果
+X = np.concatenate([era5_flat, hres_flat, imerg_flat], axis=1) #把三个数据源横向拼接成一个大的输入矩阵x，axis=1表示沿特征维度拼接，结果是每个时间步包含来自三个数据源的所有特征
+y = target.reshape(target.shape[0], -1) #把目标数据值展平成二维，格式是（时间步，空间点）
+
+#第四部分：划分训练集和测试集
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+#把数据按8:2的比例分成训练集和测试集。test_size=0.2表示20%的数据用来测试，80%用来训练。random_state=42是随机种子，保证每次运行结果一致，方便复现。
+
+#第五部分：训练模型
+model = LinearRegression() #创建一个线性回归模型对象，此时模型还是空的，什么都没学
+model.fit(X_train, y_train) #用训练数据训练模型，这一行是模型“学习”过程。线性回归会找到一组最优的权重，使预测值和真实值之间的误差最小
+
+#第六部分：评估
+y_pred = model.predict(X_test) #用训练好的模型对测试集进行预测，得到预测结果
+rmse = np.sqrt(mean_squared_error(y_test, y_pred)) #计算RMSE均方根误差，数值越小说明预测越准。对大误差惩罚更重，对极端降水事件更敏感
+mae = mean_absolute_error(y_test, y_pred) #计算MAE平均绝对误差，就是预测值和真实值差的平均值，直观易懂
+cc = np.corrcoef(y_test.flatten(), y_pred.flatten())[0, 1] #计算相关稀疏CC，衡量预测值和真实值的线性相关程度，值域是-1到1，越接近1说明预测趋势越准确。.flatten()是把二维数据拉成一维方便计算，【0,1】是取相关系数矩阵里的对角线外元素
+
+#第七部分：可视化
+plt.figure(figsize=(12, 4)) #创建一个宽12高4的画布
+
+plt.subplot(1, 2, 1)
+plt.scatter(y_test.flatten(), y_pred.flatten(), alpha=0.3, s=1)
+plt.xlabel('真实值')
+plt.ylabel('预测值')
+plt.title('线性回归：真实值 vs 预测值')
+#画第一张图：散点图，横轴是真实值，纵轴是预测值。如果模型很准，点应该是沿对角线分布。alpha=0.3是透明度，s=1是点的大小，因为点很多所以设点小一点防止重叠看不清
+
+plt.subplot(1, 2, 2)
+plt.plot(y_test[0], label='真实值')
+plt.plot(y_pred[0], label='预测值')
+plt.legend()
+plt.title('第一个样本对比') 
+#画第二张图:取第一个测试样本，对比真实降水和预测降水的曲线，直观看模型预测效果
+
+plt.tight_layout()
+plt.savefig('linear_regression_result.png')
+plt.show()
+#tight_layout()自动调整子图间距防止重叠，savefig把图保存在本地，show在屏幕上显示
+
+
+
+
