@@ -1,0 +1,85 @@
+#第一部分:导入库
+import numpy as np #导入numpy，用来处理数组数据
+from sklearn.ensemble import RandomForestRegressor #从sclikit-learn库里导入集成（ensemble）模型，这就是我们要用的黑盒
+from sklearn.metrics import mean_squared_error, mean_absolute_error #导入两个评估指标，用来衡量模型预测得好不好
+from sklearn.model_selection import train_test_split  #导入数据集划分工具，把数据分成训练集和测试集
+import matplotlib.pyplot as plt #导入图画库，用来可视化结果
+
+# ============================================================
+# 第一部分：加载数据（需要修改的地方）
+# ============================================================
+era5   = np.load(r'data/ERA5_npy/你的文件名.npy')
+hres   = np.load(r'data/HRES/你的文件名.npy')
+imerg  = np.load(r'data/IMERG_npy/你的文件名.npy')
+gauges = np.load(r'data/gauges_npy/你的文件名.npy')
+target = gauges
+
+# ============================================================
+# 第二部分：数据预处理（根据数据shape可能需要调整）
+# ============================================================
+era5_flat  = era5.reshape(era5.shape[0], -1)
+hres_flat  = hres.reshape(hres.shape[0], -1)
+imerg_flat = imerg.reshape(imerg.shape[0], -1)
+
+X = np.concatenate([era5_flat, hres_flat, imerg_flat], axis=1)
+y = target.reshape(target.shape[0], -1)
+
+# ============================================================
+# 第三部分：划分训练集和测试集（不需要修改）
+# ============================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# ============================================================
+# 第四部分：训练模型（可以调整的参数在这里）
+# ============================================================
+model = RandomForestRegressor(
+    n_estimators=100,    # 树的数量，越多越准但越慢
+    max_depth=10,        # 每棵树最大深度，防止过拟合
+    n_jobs=-1,           # 用全部CPU核心并行训练
+    random_state=42
+)
+model.fit(X_train, y_train)
+
+# ============================================================
+# 第五部分：评估（不需要修改）
+# ============================================================
+y_pred = model.predict(X_test)
+
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+mae  = mean_absolute_error(y_test, y_pred)
+cc   = np.corrcoef(y_test.flatten(), y_pred.flatten())[0, 1]
+
+print(f'RMSE: {rmse:.4f}')
+print(f'MAE:  {mae:.4f}')
+print(f'CC:   {cc:.4f}')
+
+# ============================================================
+# 第六部分：Random Forest特有——特征重要性（线性回归没有）
+# ============================================================
+importances = model.feature_importances_
+print(f'ERA5贡献度:  {importances[:era5_flat.shape[1]].sum():.4f}')
+print(f'HRES贡献度:  {importances[era5_flat.shape[1]:era5_flat.shape[1]+hres_flat.shape[1]].sum():.4f}')
+print(f'IMERG贡献度: {importances[era5_flat.shape[1]+hres_flat.shape[1]:].sum():.4f}')
+
+# ============================================================
+# 第七部分：可视化（不需要修改）
+# ============================================================
+plt.figure(figsize=(12, 4))
+
+plt.subplot(1, 2, 1)
+plt.scatter(y_test.flatten(), y_pred.flatten(), alpha=0.3, s=1)
+plt.xlabel('真实值')
+plt.ylabel('预测值')
+plt.title('Random Forest：真实值 vs 预测值')
+
+plt.subplot(1, 2, 2)
+plt.plot(y_test[0], label='真实值')
+plt.plot(y_pred[0], label='预测值')
+plt.legend()
+plt.title('第一个样本对比')
+
+plt.tight_layout()
+plt.savefig('random_forest_result.png')
+plt.show()
