@@ -1,50 +1,39 @@
 #第一部分:导入库
 import numpy as np #导入numpy，用来处理数组数据
-from sklearn.ensemble import RandomForestRegressor #从sclikit-learn库里导入集成（ensemble）模型，这就是我们要用的黑盒
+from sklearn.ensemble import RandomForestRegressor #（和线性回归模型不一样的地方①）从sclikit-learn库里导入集成（ensemble）模型，这就是我们要用的黑盒
 from sklearn.metrics import mean_squared_error, mean_absolute_error #导入两个评估指标，用来衡量模型预测得好不好
 from sklearn.model_selection import train_test_split  #导入数据集划分工具，把数据分成训练集和测试集
 import matplotlib.pyplot as plt #导入图画库，用来可视化结果
 
-# ============================================================
-# 第一部分：加载数据（需要修改的地方）
-# ============================================================
+# 第二部分：加载数据（需要修改的地方）
 era5   = np.load(r'data/ERA5_npy/你的文件名.npy')
 hres   = np.load(r'data/HRES/你的文件名.npy')
 imerg  = np.load(r'data/IMERG_npy/你的文件名.npy')
 gauges = np.load(r'data/gauges_npy/你的文件名.npy')
 target = gauges
 
-# ============================================================
-# 第二部分：数据预处理（根据数据shape可能需要调整）
-# ============================================================
+# 第三部分：数据预处理（根据数据shape可能需要调整）
 era5_flat  = era5.reshape(era5.shape[0], -1)
 hres_flat  = hres.reshape(hres.shape[0], -1)
 imerg_flat = imerg.reshape(imerg.shape[0], -1)
-
 X = np.concatenate([era5_flat, hres_flat, imerg_flat], axis=1)
 y = target.reshape(target.shape[0], -1)
 
-# ============================================================
-# 第三部分：划分训练集和测试集（不需要修改）
-# ============================================================
+# 第四部分：划分训练集和测试集
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# ============================================================
-# 第四部分：训练模型（可以调整的参数在这里）
-# ============================================================
+# 第五部分：训练模型（和线性回归不一样的地方②）
 model = RandomForestRegressor(
-    n_estimators=100,    # 树的数量，越多越准但越慢
-    max_depth=10,        # 每棵树最大深度，防止过拟合
-    n_jobs=-1,           # 用全部CPU核心并行训练
-    random_state=42
+    n_estimators=100,    #森林里有多少棵树。100棵树投票决定最终结果，比1棵树准很多。树越多越准但越慢，100是个常用的平衡点。
+    max_depth=10,        #每棵树最多长10层。不限制深度的话树会一直生长直到把训练数据完全记住，导致过拟合——在训练集上表现很好，但测试集上表现很差。限制深度相当于给树“剪枝”
+    n_jobs=-1,           # 用全部CPU核心并行训练，-1是全部用上的意思
+    random_state=42  #固定森林里100棵树的生长方式，保证每次运行训练出来的森林长得一模一样
 )
 model.fit(X_train, y_train)
 
-# ============================================================
-# 第五部分：评估（不需要修改）
-# ============================================================
+# 第六部分：评估
 y_pred = model.predict(X_test)
 
 rmse = np.sqrt(mean_squared_error(y_test, y_pred))
@@ -55,17 +44,14 @@ print(f'RMSE: {rmse:.4f}')
 print(f'MAE:  {mae:.4f}')
 print(f'CC:   {cc:.4f}')
 
-# ============================================================
-# 第六部分：Random Forest特有——特征重要性（线性回归没有）
-# ============================================================
-importances = model.feature_importances_
-print(f'ERA5贡献度:  {importances[:era5_flat.shape[1]].sum():.4f}')
-print(f'HRES贡献度:  {importances[era5_flat.shape[1]:era5_flat.shape[1]+hres_flat.shape[1]].sum():.4f}')
-print(f'IMERG贡献度: {importances[era5_flat.shape[1]+hres_flat.shape[1]:].sum():.4f}')
+# 第七部分：Random Forest特有——特征重要性（线性回归没有）
+importances = model.feature_importances_ #importances是一个和X特征数一样长的数组，记录每个位置的贡献值。这行的意思是把模型自动计算好的特征重要性数组取出来存进importances里。
+print(f'ERA5贡献度:  {importances[:era5_flat.shape[1]].sum():.4f}') #从头切到ERA5结束的位置，然后全加起来
+print(f'HRES贡献度:  {importances[era5_flat.shape[1]:era5_flat.shape[1]+hres_flat.shape[1]].sum():.4f}') #从ERA5结束的地方开始切，切到HRES结束的地方，然后全部加起来
+print(f'IMERG贡献度: {importances[era5_flat.shape[1]+hres_flat.shape[1]:].sum():.4f}') #从HRES结束的地方一直切到最后，然后全加起来
+#冒号左边没写=从头开始，冒号右边没写=一直到最后
 
-# ============================================================
-# 第七部分：可视化（不需要修改）
-# ============================================================
+# 第八部分：可视化
 plt.figure(figsize=(12, 4))
 
 plt.subplot(1, 2, 1)
